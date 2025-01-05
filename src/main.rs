@@ -1,5 +1,10 @@
 use actix_web::{web, App, HttpResponse, HttpServer};
+use image::{codecs::png::PngEncoder, ExtendedColorType, ImageEncoder, ImageError};
+use rand::Rng;
 use serde::Deserialize;
+use std;
+use std::fs::File;
+use std::thread;
 use std::time;
 use tokio;
 
@@ -59,31 +64,56 @@ fn gcd(mut n: u64, mut m: u64) -> u64 {
 // #[tokio::main]
 #[actix_web::main]
 async fn main() {
-    let odd = print_odd();
-    let even = print_even();
-    println!("Begin counting...");
-    // This waits until both functions are executed
-    tokio::join!(even, odd);
-    println!("This is the end");
-    let s = "The content of x is: ";
-    let print_x_closure = |x: &str| {
-        println!("{s} {x}");
-    };
-    func_with_closure(print_x_closure);
+    // let odd = print_odd();
+    // let even = print_even();
+    // println!("Begin counting...");
+    // // This waits until both functions are executed
+    // tokio::join!(even, odd);
+    // println!("This is the end");
+    // let s = "The content of x is: ";
+    // let print_x_closure = |x: &str| {
+    //     println!("{s} {x}");
+    // };
+    // func_with_closure(print_x_closure);
 
     // RUST HTTP SERVER
-    let server = HttpServer::new(|| {
-        App::new()
-            .route("/", web::get().to(get_index))
-            .route("/gcd", web::post().to(post_gcd))
-    });
-    println!("Server is running port 3000");
-    server
-        .bind("127.0.0.1:3000")
-        .expect("Error binding to the port")
-        .run()
-        .await
-        .expect("Error running the server");
+    // let server = HttpServer::new(|| {
+    //     App::new()
+    //         .route("/", web::get().to(get_index))
+    //         .route("/gcd", web::post().to(post_gcd))
+    // });
+    // println!("Server is running port 3000");
+    // server
+    //     .bind("127.0.0.1:3000")
+    //     .expect("Error binding to the port")
+    //     .run()
+    //     .await
+    //     .expect("Error running the server");
+    // Multi-Threading Exploration
+    // run_thread();
+    // let res = test_question_mark_operator();
+    // match res {
+    //     Ok(s) => {
+    //         println!("File Opened")
+    //     }
+    //     Err(e) => eprintln!("{:?}", e),
+    // }
+    let png_width = 640;
+    let png_height = 480;
+    let file_name = "gray.png";
+    let mut image_buffer = vec![0; png_width * png_height];
+    for idx in 0..png_width * png_height {
+        image_buffer[idx] = rand::thread_rng().gen_range(0..=255);
+    }
+    let write_res = write_png(file_name, &image_buffer, (png_width, png_height));
+    match write_res {
+        Ok(_) => {
+            println!("Gray Png created!")
+        }
+        Err(e) => {
+            println!("Error creating png: {:?}", e)
+        }
+    }
 }
 
 async fn get_index() -> HttpResponse {
@@ -113,4 +143,40 @@ async fn post_gcd(form: web::Form<GCDParameters>) -> HttpResponse {
         gcd(form.m, form.n)
     );
     HttpResponse::Ok().content_type("text/html").body(response)
+}
+
+fn run_thread() {
+    let s = "String in the run thread";
+    let mut v = vec![1, 2, 3];
+    let handle = thread::spawn(move || {
+        thread::sleep(time::Duration::from_secs(2));
+        println!("The Content of s is: {}", s);
+        v.push(4);
+        println!("The Content of V is: {:?}", v);
+    });
+    handle.join().unwrap();
+}
+
+fn test_question_mark_operator() -> Result<String, std::io::Error> {
+    std::fs::File::open("non_existent.txt")?;
+    // let res = std::fs::File::open("non_existent.txt");
+    // match res {
+    //     Ok(file) => {
+    //         return Ok("File opened successfully: {}".to_string());
+    //     }
+    //     Err(e) => Err(e),
+    // }
+    Ok("File opened successfully: {}".to_string())
+}
+
+fn write_png(file_name: &str, pixels: &[u8], dimensions: (usize, usize)) -> Result<(), ImageError> {
+    let output = File::create(file_name)?;
+    let encoder = PngEncoder::new(output);
+    encoder.write_image(
+        pixels,
+        dimensions.0 as u32,
+        dimensions.1 as u32,
+        ExtendedColorType::L8,
+    )?;
+    Ok(())
 }
