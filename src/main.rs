@@ -1,5 +1,6 @@
 use actix_web::{web, App, HttpResponse, HttpServer};
 use image::{codecs::png::PngEncoder, ExtendedColorType, ImageEncoder, ImageError};
+use num::Complex;
 use rand::Rng;
 use serde::Deserialize;
 use std;
@@ -179,4 +180,34 @@ fn write_png(file_name: &str, pixels: &[u8], dimensions: (usize, usize)) -> Resu
         ExtendedColorType::L8,
     )?;
     Ok(())
+}
+
+fn escape_time(c: Complex<f64>, limit: usize) -> Option<usize> {
+    let mut z = Complex { re: 0.0, im: 0.0 };
+    for i in 0..limit {
+        if z.norm_sqr() > 4.0 {
+            return Some(i);
+        }
+        z = z * z + c;
+    }
+    None
+}
+
+#[test]
+fn test_points_for_mandelbrot_set() {
+    let limit = 255;
+    // O is in the set
+    assert!(escape_time(Complex { re: 0.0, im: 0.0 }, limit).is_none());
+    // -1 is in the set
+    assert!(escape_time(Complex { re: -1.0, im: 0.0 }, limit).is_none());
+    // i is in the set
+    assert!(escape_time(Complex { re: 0.0, im: 1.0 }, limit).is_none());
+    // 2i is not in the set
+    assert!(escape_time(Complex { re: 0.0, im: 2.0 }, limit).is_some());
+    // 3 is not in the set
+    assert!(escape_time(Complex { re: 3.0, im: 0.0 }, limit).is_some());
+    // 1 is not in the set
+    assert!(escape_time(Complex { re: 1.0, im: 0.0 }, limit).is_some());
+    // 1+1 is not in the set
+    assert!(escape_time(Complex { re: 1.0, im: 1.0 }, limit).is_some());
 }
