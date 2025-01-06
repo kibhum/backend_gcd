@@ -10,3 +10,4 @@ serde={version="1.0" ,features=["derive"]}
 image="0.25.0"
 rand="0.8"
 num="0.4"
+crossbeam="0.8"

@@ -116,7 +116,8 @@ async fn main() {
     //         println!("Error creating png: {:?}", e)
     //     }
     // }
-    run_in_single_thread();
+    // run_in_single_thread();
+    run_in_multiple_threads()
 }
 
 async fn get_index() -> HttpResponse {
@@ -281,4 +282,46 @@ fn run_in_single_thread() {
         complex_bottom_right,
     );
     write_png("mandelbrot.png", &pixels, image_dimension).expect("Error writing png file");
+}
+
+fn run_in_multiple_threads() {
+    let image_dimension = (1000, 750);
+    let mut pixels = vec![0; image_dimension.0 * image_dimension.1];
+    let complex_upper_left = Complex {
+        re: -1.20,
+        im: 0.35,
+    };
+    let complex_bottom_right = Complex { re: -1.0, im: 0.20 };
+    // Split the images into 5 bands vertically
+    let threads = 5;
+    let rows_per_band = image_dimension.1 / threads;
+    {
+        let bands: Vec<&mut [u8]> = pixels
+            .chunks_mut(rows_per_band * image_dimension.0)
+            .collect();
+        crossbeam::scope(|spawner| {
+            for (i, band) in bands.into_iter().enumerate() {
+                let top = rows_per_band * i;
+                let height = rows_per_band;
+                let band_bounds = (image_dimension.0, height);
+                let band_upper_left = pixel_to_complex_number(
+                    image_dimension,
+                    (0, top),
+                    complex_upper_left,
+                    complex_bottom_right,
+                );
+                let band_bottom_right = pixel_to_complex_number(
+                    image_dimension,
+                    (image_dimension.0, top + height),
+                    complex_upper_left,
+                    complex_bottom_right,
+                );
+                spawner.spawn(move |_| {
+                    render(band, band_bounds, band_upper_left, band_bottom_right);
+                });
+            }
+        })
+        .unwrap();
+        write_png("mandelbrot.png", &pixels, image_dimension).expect("Error writing png file");
+    }
 }
