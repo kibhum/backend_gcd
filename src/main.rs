@@ -5,6 +5,7 @@ use rand::Rng;
 use serde::Deserialize;
 use std;
 use std::fs::File;
+use std::io;
 use std::thread;
 use std::time;
 use tokio;
@@ -99,22 +100,23 @@ async fn main() {
     //     }
     //     Err(e) => eprintln!("{:?}", e),
     // }
-    let png_width = 640;
-    let png_height = 480;
-    let file_name = "gray.png";
-    let mut image_buffer = vec![0; png_width * png_height];
-    for idx in 0..png_width * png_height {
-        image_buffer[idx] = rand::thread_rng().gen_range(0..=255);
-    }
-    let write_res = write_png(file_name, &image_buffer, (png_width, png_height));
-    match write_res {
-        Ok(_) => {
-            println!("Gray Png created!")
-        }
-        Err(e) => {
-            println!("Error creating png: {:?}", e)
-        }
-    }
+    // let png_width = 640;
+    // let png_height = 480;
+    // let file_name = "gray.png";
+    // let mut image_buffer = vec![0; png_width * png_height];
+    // for idx in 0..png_width * png_height {
+    //     image_buffer[idx] = rand::thread_rng().gen_range(0..=255);
+    // }
+    // let write_res = write_png(file_name, &image_buffer, (png_width, png_height));
+    // match write_res {
+    //     Ok(_) => {
+    //         println!("Gray Png created!")
+    //     }
+    //     Err(e) => {
+    //         println!("Error creating png: {:?}", e)
+    //     }
+    // }
+    run_in_single_thread();
 }
 
 async fn get_index() -> HttpResponse {
@@ -210,4 +212,73 @@ fn test_points_for_mandelbrot_set() {
     assert!(escape_time(Complex { re: 1.0, im: 0.0 }, limit).is_some());
     // 1+1 is not in the set
     assert!(escape_time(Complex { re: 1.0, im: 1.0 }, limit).is_some());
+}
+
+fn pixel_to_complex_number(
+    image_dimension: (usize, usize),
+    pixel_coordinates: (usize, usize),
+    complex_upper_left: Complex<f64>,
+    complex_bottom_right: Complex<f64>,
+) -> Complex<f64> {
+    let complex_plane_width = complex_bottom_right.re - complex_upper_left.re;
+    let complex_plane_height = complex_upper_left.im - complex_bottom_right.im;
+    Complex {
+        re: complex_upper_left.re
+            + (pixel_coordinates.0 as f64 / image_dimension.0 as f64) * complex_plane_width,
+        im: complex_upper_left.im
+            - (pixel_coordinates.1 as f64 / image_dimension.1 as f64) * complex_plane_height,
+    }
+}
+
+#[test]
+fn test_pixel_to_complex_number() {
+    assert_eq!(
+        pixel_to_complex_number(
+            (100, 100),
+            (20, 30),
+            Complex { re: 10.0, im: 20.0 },
+            Complex { re: 20.0, im: 5.0 },
+        ),
+        Complex { re: 12.0, im: 15.5 }
+    )
+}
+
+fn render(
+    pixels: &mut [u8],
+    image_dimension: (usize, usize),
+    complex_upper_left: Complex<f64>,
+    complex_bottom_right: Complex<f64>,
+) {
+    assert!(pixels.len() == image_dimension.0 * image_dimension.1);
+    for row in 0..image_dimension.1 {
+        for column in 0..image_dimension.0 {
+            let complex_number = pixel_to_complex_number(
+                image_dimension,
+                (column, row),
+                complex_upper_left,
+                complex_bottom_right,
+            );
+            pixels[row * image_dimension.0 + column] = match escape_time(complex_number, 255) {
+                None => 0,
+                Some(count) => 255 - count as u8,
+            }
+        }
+    }
+}
+
+fn run_in_single_thread() {
+    let image_dimension = (1000, 750);
+    let mut pixels = vec![0; image_dimension.0 * image_dimension.1];
+    let complex_upper_left = Complex {
+        re: -1.20,
+        im: 0.35,
+    };
+    let complex_bottom_right = Complex { re: -1.0, im: 0.20 };
+    render(
+        &mut pixels,
+        image_dimension,
+        complex_upper_left,
+        complex_bottom_right,
+    );
+    write_png("mandelbrot.png", &pixels, image_dimension).expect("Error writing png file");
 }
