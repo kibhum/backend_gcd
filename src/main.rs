@@ -2,18 +2,29 @@ use actix_web::{web, App, HttpResponse, HttpServer};
 use image::{codecs::png::PngEncoder, ExtendedColorType, ImageEncoder, ImageError};
 use num::Complex;
 use rand::Rng;
+use regex::Regex;
 use serde::Deserialize;
 use std;
+use std::env;
+use std::fs;
 use std::fs::File;
-use std::io;
 use std::thread;
 use std::time;
+use text_colorizer::*;
 use tokio;
 
 #[derive(Deserialize)]
 struct GCDParameters {
     n: u64,
     m: u64,
+}
+
+#[derive(Debug)]
+struct Arguments {
+    target: String,
+    replacement: String,
+    filename: String,
+    output: String,
 }
 
 async fn print_odd() {
@@ -117,7 +128,52 @@ async fn main() {
     //     }
     // }
     // run_in_single_thread();
-    run_in_multiple_threads()
+    // run_in_multiple_threads()
+    // print_usage()
+    let args = parse_args();
+    println!("{:?}", args);
+    let data = match fs::read_to_string(&args.filename) {
+        Ok(content) => {
+            println!("The file contents are: {}", content.green().bold());
+            content
+        }
+        Err(e) => {
+            eprintln!(
+                "{} reading the file contents from '{}' {:?}",
+                "Error".red(),
+                args.filename.green(),
+                e
+            );
+            std::process::exit(1);
+        }
+    };
+
+    let replaced_data = match replace(&args.target, &args.replacement, &data) {
+        Ok(content) => content,
+        Err(e) => {
+            eprintln!(
+                "{} replacing the content with error: {:?}",
+                "Error".red().bold(),
+                e
+            );
+            std::process::exit(1);
+        }
+    };
+
+    match fs::write(&args.output, &replaced_data) {
+        Ok(_) => {
+            println!("{}", "File written".green().bold())
+        }
+        Err(e) => {
+            eprintln!(
+                "{} writing the file contents to '{}' {:?}",
+                "Error".red(),
+                args.output.blue(),
+                e
+            );
+            std::process::exit(1);
+        }
+    };
 }
 
 async fn get_index() -> HttpResponse {
@@ -324,4 +380,38 @@ fn run_in_multiple_threads() {
         .unwrap();
         write_png("mandelbrot.png", &pixels, image_dimension).expect("Error writing png file");
     }
+}
+
+fn print_usage() {
+    eprintln!(
+        "{} -replace all occurrence of one string with the other",
+        "filetooling".green().bold()
+    );
+    eprintln!(
+        "{}",
+        "Usage: filetooling <target> <replacement> <INPUT> <OUTPUT>".red()
+    );
+}
+
+fn parse_args() -> Arguments {
+    let args: Vec<String> = env::args().skip(1).collect();
+    if args.len() != 4 {
+        eprintln!(
+            "{} Wrong number of arguments, expected 4 and got {}",
+            "Error".red().bold(),
+            args.len()
+        );
+        std::process::exit(1);
+    }
+    Arguments {
+        target: args[0].clone(),
+        replacement: args[1].clone(),
+        filename: args[2].clone(),
+        output: args[3].clone(),
+    }
+}
+
+fn replace(target: &str, replacement: &str, text: &str) -> Result<String, regex::Error> {
+    let regex = Regex::new(target)?;
+    Ok(regex.replace_all(text, replacement).to_string())
 }
